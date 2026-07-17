@@ -1,49 +1,156 @@
+using Fusion;
 using UnityEngine;
 
-public class PlayerHealth : MonoBehaviour
+[RequireComponent(typeof(NetworkObject))]
+public class PlayerHealth : NetworkBehaviour
 {
-    public int maxHP = 3;
-    public int currentHP;
-    public Transform startPoint;
+    [Header("Health")]
+    [SerializeField]
+    private int maxHP = 100;
 
-    private CharacterController controller;
+    private PlayerMovement playerMovement;
 
-    void Start()
+    [Networked]
+    public int CurrentHP { get; set; }
+
+    [Networked]
+    public NetworkBool IsDead { get; set; }
+
+    public int currentHP
     {
-        currentHP = maxHP;
-        controller = GetComponent<CharacterController>();
+        get
+        {
+            return CurrentHP;
+        }
+    }
+
+    public int MaxHP
+    {
+        get
+        {
+            return maxHP;
+        }
+    }
+
+    public override void Spawned()
+    {
+        playerMovement = GetComponent<PlayerMovement>();
+
+        if (Object.HasStateAuthority)
+        {
+            CurrentHP = maxHP;
+            IsDead = false;
+
+            PlayerHPTextUI hpUI =
+                FindObjectOfType<PlayerHPTextUI>();
+
+            if (hpUI != null)
+            {
+                hpUI.SetPlayerHealth(this);
+            }
+        }
     }
 
     public void TakeDamage(int damage)
     {
-        currentHP -= damage;
-
-        Debug.Log(gameObject.name + " HP: " + currentHP);
-
-        if (currentHP <= 0)
+        if (damage <= 0)
         {
-            Respawn();
+            return;
         }
+
+        if (Object == null)
+        {
+            Debug.LogError(
+                "PlayerHealth is not attached to a NetworkObject."
+            );
+
+            return;
+        }
+
+        RpcTakeDamage(damage);
     }
 
-    void Respawn()
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RpcTakeDamage(int damage)
     {
-        currentHP = maxHP;
-
-        if (startPoint != null)
+        if (damage <= 0)
         {
-            if (controller != null)
-            {
-                controller.enabled = false;
-                transform.position = startPoint.position;
-                controller.enabled = true;
-            }
-            else
-            {
-                transform.position = startPoint.position;
-            }
+            return;
         }
 
-        Debug.Log(gameObject.name + " がスタート地点に戻りました");
+        if (IsDead)
+        {
+            return;
+        }
+
+        CurrentHP = Mathf.Max(
+            0,
+            CurrentHP - damage
+        );
+
+        if (CurrentHP <= 0)
+        {
+            IsDead = true;
+
+            if (playerMovement != null)
+            {
+                playerMovement.ApplyDamageReaction(true);
+            }
+
+            Debug.Log(
+                "Player dead. HP: " +
+                CurrentHP
+            );
+
+            return;
+        }
+
+        if (playerMovement != null)
+        {
+            playerMovement.ApplyDamageReaction(false);
+        }
+
+        Debug.Log(
+            "Player damage: " +
+            damage +
+            " HP: " +
+            CurrentHP
+        );
+    }
+
+    public void Heal(int amount)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        RpcHeal(amount);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RpcHeal(int amount)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        if (IsDead)
+        {
+            return;
+        }
+
+        CurrentHP = Mathf.Min(
+            maxHP,
+            CurrentHP + amount
+        );
+
+        Debug.Log(
+            "Player heal: " +
+            amount +
+            " HP: " +
+            CurrentHP
+        );
     }
 }

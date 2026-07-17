@@ -1,8 +1,10 @@
+using System.Collections;
 using Fusion;
 using UnityEngine;
 
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(NetworkObject))]
+[RequireComponent(typeof(PlayerHealth))]
 public class PlayerMovement : NetworkBehaviour
 {
     [Header("Movement")]
@@ -20,22 +22,40 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private float attackTime = 1.0f;
     [SerializeField] private float damageTime = 0.8f;
 
+    [Header("Attack Hitbox")]
+    [SerializeField] private AttackHitbox attackHitbox;
+
+    [SerializeField] private int stabDamage = 25;
+    [SerializeField] private int fullAttackDamage = 35;
+
+    [SerializeField] private float stabHitDelay = 0.2f;
+    [SerializeField] private float stabHitDuration = 0.3f;
+
+    [SerializeField] private float fullAttackHitDelay = 0.35f;
+    [SerializeField] private float fullAttackHitDuration = 0.4f;
+
+    [Header("Debug")]
+    [SerializeField] private int testDamage = 25;
+
     private CharacterController controller;
     private Animator animator;
+    private PlayerHealth playerHealth;
 
     private float verticalVelocity;
     private float cameraPitch;
 
     private int currentAnimId = -1;
 
-    private bool damageRequested;
     private bool stabRequested;
     private bool fullAttackRequested;
 
-    [Networked] private int NetworkAnimId { get; set; }
-    [Networked] private int DamageCount { get; set; }
-    [Networked] private NetworkBool IsDead { get; set; }
-    [Networked] private TickTimer ActionTimer { get; set; }
+    private Coroutine attackHitboxRoutine;
+
+    [Networked]
+    private int NetworkAnimId { get; set; }
+
+    [Networked]
+    private TickTimer ActionTimer { get; set; }
 
     private const int ANIM_IDLE = 0;
     private const int ANIM_RUN_FORWARD = 1;
@@ -61,26 +81,42 @@ public class PlayerMovement : NetworkBehaviour
     {
         get
         {
-            return Object != null && Object.HasStateAuthority;
+            return Object != null &&
+                   Object.HasStateAuthority;
         }
     }
 
     public override void Spawned()
     {
-        controller = GetComponent<CharacterController>();
-        animator = GetComponentInChildren<Animator>();
+        controller =
+            GetComponent<CharacterController>();
+
+        animator =
+            GetComponentInChildren<Animator>();
+
+        playerHealth =
+            GetComponent<PlayerHealth>();
+
+        if (attackHitbox == null)
+        {
+            attackHitbox =
+                GetComponentInChildren<AttackHitbox>(true);
+        }
 
         if (animator != null)
         {
             animator.applyRootMotion = false;
         }
 
+        if (attackHitbox != null)
+        {
+            attackHitbox.EndAttack();
+        }
+
         SetupCamera();
 
         if (HasLocalControl)
         {
-            DamageCount = 0;
-            IsDead = false;
             ActionTimer = TickTimer.None;
             ChangeAnim(ANIM_IDLE);
         }
@@ -93,7 +129,8 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
-        if (IsDead)
+        if (playerHealth != null &&
+            playerHealth.IsDead)
         {
             return;
         }
@@ -105,7 +142,16 @@ public class PlayerMovement : NetworkBehaviour
 
         if (Input.GetKeyDown(KeyCode.P))
         {
-            damageRequested = true;
+            if (playerHealth != null)
+            {
+                playerHealth.RpcTakeDamage(testDamage);
+            }
+
+            return;
+        }
+
+        if (ActionTimer.IsRunning)
+        {
             return;
         }
 
@@ -135,10 +181,17 @@ public class PlayerMovement : NetworkBehaviour
 
         float deltaTime = Runner.DeltaTime;
 
-        if (IsDead)
+        if (playerHealth != null &&
+            playerHealth.IsDead)
         {
             ClearRequests();
-            MoveWithGravity(Vector3.zero, deltaTime);
+            StopAttackHitbox();
+
+            MoveWithGravity(
+                Vector3.zero,
+                deltaTime
+            );
+
             ChangeAnim(ANIM_DEATH);
             return;
         }
@@ -153,32 +206,53 @@ public class PlayerMovement : NetworkBehaviour
             else
             {
                 ClearRequests();
-                MoveWithGravity(Vector3.zero, deltaTime);
+
+                MoveWithGravity(
+                    Vector3.zero,
+                    deltaTime
+                );
+
                 return;
             }
-        }
-
-        if (damageRequested)
-        {
-            ClearRequests();
-            TakeDamage();
-            MoveWithGravity(Vector3.zero, deltaTime);
-            return;
         }
 
         if (stabRequested)
         {
             ClearRequests();
-            StartAction(ANIM_ATTACK_STAB, attackTime);
-            MoveWithGravity(Vector3.zero, deltaTime);
+
+            StartAttack(
+                ANIM_ATTACK_STAB,
+                attackTime,
+                stabDamage,
+                stabHitDelay,
+                stabHitDuration
+            );
+
+            MoveWithGravity(
+                Vector3.zero,
+                deltaTime
+            );
+
             return;
         }
 
         if (fullAttackRequested)
         {
             ClearRequests();
-            StartAction(ANIM_ATTACK_FULL, attackTime);
-            MoveWithGravity(Vector3.zero, deltaTime);
+
+            StartAttack(
+                ANIM_ATTACK_FULL,
+                attackTime,
+                fullAttackDamage,
+                fullAttackHitDelay,
+                fullAttackHitDuration
+            );
+
+            MoveWithGravity(
+                Vector3.zero,
+                deltaTime
+            );
+
             return;
         }
 
@@ -225,9 +299,17 @@ public class PlayerMovement : NetworkBehaviour
             moveDirection.Normalize();
         }
 
-        int nextAnim = GetMoveAnimation(horizontal, vertical);
+        int nextAnim =
+            GetMoveAnimation(
+                horizontal,
+                vertical
+            );
 
-        MoveWithGravity(moveDirection, deltaTime);
+        MoveWithGravity(
+            moveDirection,
+            deltaTime
+        );
+
         ChangeAnim(nextAnim);
     }
 
@@ -236,19 +318,25 @@ public class PlayerMovement : NetworkBehaviour
         float deltaTime
     )
     {
-        if (controller.isGrounded && verticalVelocity < 0.0f)
+        if (controller.isGrounded &&
+            verticalVelocity < 0.0f)
         {
             verticalVelocity = -1.0f;
         }
         else
         {
-            verticalVelocity += gravity * deltaTime;
+            verticalVelocity +=
+                gravity * deltaTime;
         }
 
-        Vector3 velocity = moveDirection * moveSpeed;
+        Vector3 velocity =
+            moveDirection * moveSpeed;
+
         velocity.y = verticalVelocity;
 
-        controller.Move(velocity * deltaTime);
+        controller.Move(
+            velocity * deltaTime
+        );
     }
 
     private int GetMoveAnimation(
@@ -256,7 +344,8 @@ public class PlayerMovement : NetworkBehaviour
         float vertical
     )
     {
-        if (Mathf.Abs(vertical) >= Mathf.Abs(horizontal))
+        if (Mathf.Abs(vertical) >=
+            Mathf.Abs(horizontal))
         {
             if (vertical > 0.0f)
             {
@@ -298,14 +387,11 @@ public class PlayerMovement : NetworkBehaviour
             rotateInput += 1.0f;
         }
 
-        if (Mathf.Abs(rotateInput) > 0.01f)
-        {
-            transform.Rotate(
-                0.0f,
-                rotateInput * rotateSpeed * deltaTime,
-                0.0f
-            );
-        }
+        transform.Rotate(
+            0.0f,
+            rotateInput * rotateSpeed * deltaTime,
+            0.0f
+        );
     }
 
     private void UpdateCameraPitch()
@@ -339,7 +425,76 @@ public class PlayerMovement : NetworkBehaviour
         );
 
         viewCamera.localRotation =
-            Quaternion.Euler(cameraPitch, 0.0f, 0.0f);
+            Quaternion.Euler(
+                cameraPitch,
+                0.0f,
+                0.0f
+            );
+    }
+
+    private void StartAttack(
+        int animId,
+        float actionDuration,
+        int damage,
+        float hitDelay,
+        float hitDuration
+    )
+    {
+        StartAction(
+            animId,
+            actionDuration
+        );
+
+        StopAttackHitbox();
+
+        if (attackHitbox != null)
+        {
+            attackHitboxRoutine =
+                StartCoroutine(
+                    AttackWindowRoutine(
+                        damage,
+                        hitDelay,
+                        hitDuration
+                    )
+                );
+        }
+    }
+
+    private IEnumerator AttackWindowRoutine(
+        int damage,
+        float delay,
+        float duration
+    )
+    {
+        if (delay > 0.0f)
+        {
+            yield return
+                new WaitForSeconds(delay);
+        }
+
+        if (!HasLocalControl)
+        {
+            attackHitboxRoutine = null;
+            yield break;
+        }
+
+        if (playerHealth != null &&
+            playerHealth.IsDead)
+        {
+            attackHitboxRoutine = null;
+            yield break;
+        }
+
+        attackHitbox.BeginAttack(damage);
+
+        if (duration > 0.0f)
+        {
+            yield return
+                new WaitForSeconds(duration);
+        }
+
+        attackHitbox.EndAttack();
+        attackHitboxRoutine = null;
     }
 
     private void StartAction(
@@ -347,27 +502,39 @@ public class PlayerMovement : NetworkBehaviour
         float duration
     )
     {
-        ActionTimer = TickTimer.CreateFromSeconds(
-            Runner,
-            duration
-        );
+        ActionTimer =
+            TickTimer.CreateFromSeconds(
+                Runner,
+                duration
+            );
 
         ChangeAnim(animId);
     }
 
-    private void TakeDamage()
+    public void ApplyDamageReaction(bool dead)
     {
-        DamageCount++;
-
-        if (DamageCount >= 3)
+        if (!HasLocalControl)
         {
-            IsDead = true;
+            return;
+        }
+
+        StopAttackHitbox();
+        ClearRequests();
+
+        if (dead)
+        {
             ActionTimer = TickTimer.None;
             ChangeAnim(ANIM_DEATH);
             return;
         }
 
-        StartAction(ANIM_DAMAGE, damageTime);
+        ActionTimer =
+            TickTimer.CreateFromSeconds(
+                Runner,
+                damageTime
+            );
+
+        ChangeAnim(ANIM_DAMAGE);
     }
 
     private void ChangeAnim(int animId)
@@ -399,10 +566,8 @@ public class PlayerMovement : NetworkBehaviour
 
         currentAnimId = animId;
 
-        string stateName = GetAnimName(animId);
-
         animator.CrossFade(
-            stateName,
+            GetAnimName(animId),
             0.1f,
             0
         );
@@ -436,7 +601,6 @@ public class PlayerMovement : NetworkBehaviour
             case ANIM_DEATH:
                 return DEATH;
 
-            case ANIM_IDLE:
             default:
                 return IDLE;
         }
@@ -452,12 +616,18 @@ public class PlayerMovement : NetworkBehaviour
 
         if (!HasLocalControl)
         {
-            foreach (Camera cameraComponent in cameras)
+            foreach (
+                Camera cameraComponent
+                in cameras
+            )
             {
                 cameraComponent.enabled = false;
             }
 
-            foreach (AudioListener listener in listeners)
+            foreach (
+                AudioListener listener
+                in listeners
+            )
             {
                 listener.enabled = false;
             }
@@ -465,16 +635,39 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
-        if (viewCamera == null && cameras.Length > 0)
+        if (viewCamera == null &&
+            cameras.Length > 0)
         {
-            viewCamera = cameras[0].transform;
+            viewCamera =
+                cameras[0].transform;
         }
     }
 
     private void ClearRequests()
     {
-        damageRequested = false;
         stabRequested = false;
         fullAttackRequested = false;
+    }
+
+    private void StopAttackHitbox()
+    {
+        if (attackHitboxRoutine != null)
+        {
+            StopCoroutine(
+                attackHitboxRoutine
+            );
+
+            attackHitboxRoutine = null;
+        }
+
+        if (attackHitbox != null)
+        {
+            attackHitbox.EndAttack();
+        }
+    }
+
+    private void OnDisable()
+    {
+        StopAttackHitbox();
     }
 }
