@@ -155,13 +155,13 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.J))
+        if (Input.GetKeyDown(KeyCode.K))
         {
             stabRequested = true;
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.K))
+        if (Input.GetKeyDown(KeyCode.J))
         {
             fullAttackRequested = true;
         }
@@ -642,7 +642,45 @@ public class PlayerMovement : NetworkBehaviour
                 cameras[0].transform;
         }
     }
+    public void RequestStabAttack()
+    {
+        if (!HasLocalControl)
+        {
+            return;
+        }
 
+        if (playerHealth != null && playerHealth.IsDead)
+        {
+            return;
+        }
+
+        if (ActionTimer.IsRunning)
+        {
+            return;
+        }
+
+        stabRequested = true;
+    }
+
+    public void RequestFullAttack()
+    {
+        if (!HasLocalControl)
+        {
+            return;
+        }
+
+        if (playerHealth != null && playerHealth.IsDead)
+        {
+            return;
+        }
+
+        if (ActionTimer.IsRunning)
+        {
+            return;
+        }
+
+        fullAttackRequested = true;
+    }
     private void ClearRequests()
     {
         stabRequested = false;

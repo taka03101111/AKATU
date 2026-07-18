@@ -1,3 +1,4 @@
+using System.Collections;
 using Fusion;
 using UnityEngine;
 
@@ -8,7 +9,12 @@ public class PlayerHealth : NetworkBehaviour
     [SerializeField]
     private int maxHP = 100;
 
+    [Header("Respawn")]
+    [SerializeField]
+    private float respawnDelay = 2.0f;
+
     private PlayerMovement playerMovement;
+    private Coroutine respawnRoutine;
 
     [Networked]
     public int CurrentHP { get; set; }
@@ -16,19 +22,19 @@ public class PlayerHealth : NetworkBehaviour
     [Networked]
     public NetworkBool IsDead { get; set; }
 
-    public int currentHP
-    {
-        get
-        {
-            return CurrentHP;
-        }
-    }
-
     public int MaxHP
     {
         get
         {
             return maxHP;
+        }
+    }
+
+    public int currentHP
+    {
+        get
+        {
+            return CurrentHP;
         }
     }
 
@@ -40,7 +46,10 @@ public class PlayerHealth : NetworkBehaviour
         {
             CurrentHP = maxHP;
             IsDead = false;
+        }
 
+        if (Object.HasStateAuthority)
+        {
             PlayerHPTextUI hpUI =
                 FindObjectOfType<PlayerHPTextUI>();
 
@@ -60,10 +69,7 @@ public class PlayerHealth : NetworkBehaviour
 
         if (Object == null)
         {
-            Debug.LogError(
-                "PlayerHealth is not attached to a NetworkObject."
-            );
-
+            Debug.LogError("PlayerHealth is not attached to a NetworkObject.");
             return;
         }
 
@@ -90,18 +96,7 @@ public class PlayerHealth : NetworkBehaviour
 
         if (CurrentHP <= 0)
         {
-            IsDead = true;
-
-            if (playerMovement != null)
-            {
-                playerMovement.ApplyDamageReaction(true);
-            }
-
-            Debug.Log(
-                "Player dead. HP: " +
-                CurrentHP
-            );
-
+            Die();
             return;
         }
 
@@ -116,6 +111,64 @@ public class PlayerHealth : NetworkBehaviour
             " HP: " +
             CurrentHP
         );
+    }
+
+    private void Die()
+    {
+        if (IsDead)
+        {
+            return;
+        }
+
+        IsDead = true;
+
+        if (playerMovement != null)
+        {
+            playerMovement.ApplyDamageReaction(true);
+        }
+
+        Debug.Log("Player dead. HP: " + CurrentHP);
+
+        if (respawnRoutine == null)
+        {
+            respawnRoutine =
+                StartCoroutine(RespawnRoutine());
+        }
+    }
+
+    private IEnumerator RespawnRoutine()
+    {
+        yield return new WaitForSeconds(respawnDelay);
+
+        Respawn();
+    }
+
+    private void Respawn()
+    {
+        if (!Object.HasStateAuthority)
+        {
+            respawnRoutine = null;
+            return;
+        }
+
+        PlayerRespawnPoint respawnPoint =
+            GetComponent<PlayerRespawnPoint>();
+
+        if (respawnPoint != null)
+        {
+            respawnPoint.Respawn();
+        }
+        else
+        {
+            Debug.LogWarning("PlayerRespawnPointがありません。StartPointに戻れません。");
+        }
+
+        CurrentHP = maxHP;
+        IsDead = false;
+
+        respawnRoutine = null;
+
+        Debug.Log("復活しました。HP: " + CurrentHP);
     }
 
     public void Heal(int amount)

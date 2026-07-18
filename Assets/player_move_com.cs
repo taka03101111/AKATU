@@ -1,223 +1,156 @@
 using System.Collections;
-using Fusion;
 using UnityEngine;
 
 [RequireComponent(typeof(CharacterController))]
-public class player_move_com : NetworkBehaviour
+public class player_move_com : MonoBehaviour
 {
-    [Header("ˆÚ“®İ’è")]
-    public float moveSpeed = 3.0f;
-    public float rotateSpeed = 120.0f;
+    [Header("ç§»å‹•è¨­å®š")]
+    public float moveSpeed = 8.0f;
+    public float backSpeed = 5.0f;
+    public float rotateSpeed = 180.0f;
     public float gravity = -9.8f;
 
-    [Header("‹“_İ’è")]
+    [Header("ã‚«ãƒ¡ãƒ©è¨­å®š")]
     public Transform viewCamera;
-    public float cameraLookSpeed = 80.0f;
-    public float minCameraAngle = -30.0f;
-    public float maxCameraAngle = 45.0f;
 
-    [Header("ƒAƒjƒ[ƒVƒ‡ƒ“ŠÔ")]
+    [Header("ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³æ™‚é–“")]
     public float attackTime = 1.0f;
     public float damageTime = 0.8f;
 
+    [Header("ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³å")]
+    public string idleAnim = "Combat (1)";
+    public string runForwardAnim = "run force";
+    public string runBackAnim = "run back";
+    public string attackStabAnim = "sword sasu";
+    public string attackFullAnim = "sword attack";
+    public string damageAnim = "Take Damage";
+    public string deathAnim = "Death 01";
+
     private Animator animator;
     private CharacterController controller;
+    private SwordAttack swordAttack;
 
     private int damageCount = 0;
     private bool isAction = false;
     private bool isDead = false;
 
-    private float cameraPitch = 0.0f;
     private float verticalVelocity = 0.0f;
 
-    private int currentAnimId = -1;
+    private string currentAnim = "";
 
-    // ƒlƒbƒgƒ[ƒN‚Å“¯Šú‚·‚éƒAƒjƒ[ƒVƒ‡ƒ“”Ô†
-    [Networked] private int NetworkAnimId { get; set; }
-
-    // ƒAƒjƒ[ƒVƒ‡ƒ“ID
-    private const int ANIM_IDLE = 0;
-    private const int ANIM_RUN_FORWARD = 1;
-    private const int ANIM_RUN_BACK = 2;
-    private const int ANIM_RUN_LEFT = 3;
-    private const int ANIM_RUN_RIGHT = 4;
-    private const int ANIM_ATTACK_STAB = 5;
-    private const int ANIM_ATTACK_FULL = 6;
-    private const int ANIM_DAMAGE = 7;
-    private const int ANIM_DEATH = 8;
-
-    // Animator‚ÌƒXƒe[ƒg–¼
-    private const string IDLE = "Combat (1)";
-    private const string RUN_FORWARD = "‘O‚É‘–‚é";
-    private const string RUN_BACK = "Œã‚ë‚É‘–‚é";
-    private const string RUN_LEFT = "¶‚É‘–‚é";
-    private const string RUN_RIGHT = "‰E‚É‘–‚é";
-    private const string ATTACK_STAB = "Œ•‚ğ‚³‚·UŒ‚";
-    private const string ATTACK_FULL = "Œ•‚ğƒtƒ‹UŒ‚";
-    private const string DAMAGE = "Take Damage (1)";
-    private const string DEATH = "Death 01";
-
-    private bool IsMine
-    {
-        get
-        {
-            if (Object == null) return false;
-
-            // Shared Mode‚Å‚ÍŠî–{“I‚É©•ª‚ªSpawn‚µ‚½‚à‚Ì‚ªStateAuthority‚ğ‚Â
-            // HostŒn‚Å‚à“®‚«‚â‚·‚¢‚æ‚¤‚ÉInputAuthority‚àŒ©‚Ä‚¨‚­
-            return Object.HasStateAuthority || Object.HasInputAuthority;
-        }
-    }
-
-    public override void Spawned()
+    void Start()
     {
         animator = GetComponent<Animator>();
         controller = GetComponent<CharacterController>();
+        swordAttack = GetComponent<SwordAttack>();
 
-        SetupCamera();
-
-        if (IsMine)
+        if (viewCamera == null)
         {
-            ChangeAnim(ANIM_IDLE);
+            Transform cameraPoint = transform.Find("CameraPoint");
+
+            if (cameraPoint != null)
+            {
+                viewCamera = cameraPoint;
+            }
         }
+
+        PlayAnim(idleAnim);
     }
 
     void Update()
     {
-        // ©•ª‚ÌƒLƒƒƒ‰ˆÈŠO‚Í‘€ì‚µ‚È‚¢
-        if (!IsMine)
-        {
-            return;
-        }
-
-        // €–S‚µ‚½‚ç‘€ì‚Å‚«‚È‚¢
         if (isDead)
         {
             return;
         }
 
-        // P‚Åƒ_ƒ[ƒW
         if (Input.GetKeyDown(KeyCode.P))
         {
             TakeDamage();
             return;
         }
 
-        // UŒ‚’†Eƒ_ƒ[ƒW’†‚Í‘¼‚Ì‘€ì‚ğ~‚ß‚é
         if (isAction)
         {
             return;
         }
 
-        // J‚ÅŒ•‚ğ‚³‚·UŒ‚
         if (Input.GetKeyDown(KeyCode.J))
         {
-            StartCoroutine(ActionAnimation(ANIM_ATTACK_STAB, attackTime));
+            if (swordAttack != null)
+            {
+                swordAttack.TryAttack();
+            }
+
+            StartCoroutine(ActionAnimation(attackFullAnim, attackTime));
             return;
         }
 
-        // K‚ÅŒ•‚ğƒtƒ‹UŒ‚
         if (Input.GetKeyDown(KeyCode.K))
         {
-            StartCoroutine(ActionAnimation(ANIM_ATTACK_FULL, attackTime));
+            if (swordAttack != null)
+            {
+                swordAttack.TryAttack();
+            }
+
+            StartCoroutine(ActionAnimation(attackStabAnim, attackTime));
             return;
         }
 
-        LookControl();
         MoveControl();
-    }
-
-    public override void Render()
-    {
-        // ‘¼‚Ìl‚Ì‰æ–Ê‚Å‚àƒAƒjƒ[ƒVƒ‡ƒ“‚ğ”½‰f‚·‚é
-        PlayAnimById(NetworkAnimId);
     }
 
     void MoveControl()
     {
-        Vector3 move = Vector3.zero;
-        int nextAnim = ANIM_IDLE;
+        float moveInput = 0.0f;
+        float rotateInput = 0.0f;
 
         if (Input.GetKey(KeyCode.W))
         {
-            move += transform.forward;
-            nextAnim = ANIM_RUN_FORWARD;
+            moveInput = 1.0f;
         }
         else if (Input.GetKey(KeyCode.S))
         {
-            move -= transform.forward;
-            nextAnim = ANIM_RUN_BACK;
+            moveInput = -1.0f;
         }
-        else if (Input.GetKey(KeyCode.A))
+
+        if (Input.GetKey(KeyCode.A))
         {
-            move -= transform.right;
-            nextAnim = ANIM_RUN_LEFT;
+            rotateInput = -1.0f;
         }
         else if (Input.GetKey(KeyCode.D))
         {
-            move += transform.right;
-            nextAnim = ANIM_RUN_RIGHT;
+            rotateInput = 1.0f;
         }
 
-        if (move != Vector3.zero)
+        transform.Rotate(0, rotateInput * rotateSpeed * Time.deltaTime, 0);
+
+        string nextAnim = idleAnim;
+
+        if (moveInput > 0)
         {
-            move.Normalize();
+            nextAnim = runForwardAnim;
+        }
+        else if (moveInput < 0)
+        {
+            nextAnim = runBackAnim;
         }
 
-        // d—Íˆ—
         if (controller.isGrounded && verticalVelocity < 0)
         {
             verticalVelocity = -1.0f;
         }
-        else
-        {
-            verticalVelocity += gravity * Time.deltaTime;
-        }
 
-        Vector3 velocity = move * moveSpeed;
+        verticalVelocity += gravity * Time.deltaTime;
+
+        float speed = moveInput >= 0 ? moveSpeed : backSpeed;
+
+        Vector3 velocity = transform.forward * moveInput * speed;
         velocity.y = verticalVelocity;
 
-        // •Ç‚ğŠÑ’Ê‚µ‚É‚­‚­‚·‚é‚½‚ßCharacterController‚Å“®‚©‚·
         controller.Move(velocity * Time.deltaTime);
 
-        ChangeAnim(nextAnim);
-    }
-
-    void LookControl()
-    {
-        // © ¨ ‚ÅƒLƒƒƒ‰‚ğ¶‰E‰ñ“]
-        float horizontal = 0.0f;
-
-        if (Input.GetKey(KeyCode.LeftArrow))
-        {
-            horizontal = -1.0f;
-        }
-        else if (Input.GetKey(KeyCode.RightArrow))
-        {
-            horizontal = 1.0f;
-        }
-
-        transform.Rotate(0, horizontal * rotateSpeed * Time.deltaTime, 0);
-
-        // ª « ‚ÅƒJƒƒ‰ã‰º
-        if (viewCamera != null)
-        {
-            float vertical = 0.0f;
-
-            if (Input.GetKey(KeyCode.UpArrow))
-            {
-                vertical = -1.0f;
-            }
-            else if (Input.GetKey(KeyCode.DownArrow))
-            {
-                vertical = 1.0f;
-            }
-
-            cameraPitch += vertical * cameraLookSpeed * Time.deltaTime;
-            cameraPitch = Mathf.Clamp(cameraPitch, minCameraAngle, maxCameraAngle);
-
-            viewCamera.localEulerAngles = new Vector3(cameraPitch, 0, 0);
-        }
+        PlayAnim(nextAnim);
     }
 
     void TakeDamage()
@@ -228,19 +161,19 @@ public class player_move_com : NetworkBehaviour
         {
             isDead = true;
             isAction = true;
-            ChangeAnim(ANIM_DEATH);
+            PlayAnim(deathAnim);
         }
         else
         {
-            StartCoroutine(ActionAnimation(ANIM_DAMAGE, damageTime));
+            StartCoroutine(ActionAnimation(damageAnim, damageTime));
         }
     }
 
-    IEnumerator ActionAnimation(int animId, float waitTime)
+    IEnumerator ActionAnimation(string animName, float waitTime)
     {
         isAction = true;
 
-        ChangeAnim(animId);
+        PlayAnim(animName);
 
         yield return new WaitForSeconds(waitTime);
 
@@ -250,100 +183,27 @@ public class player_move_com : NetworkBehaviour
         }
 
         isAction = false;
-        ChangeAnim(ANIM_IDLE);
+        PlayAnim(idleAnim);
     }
 
-    void ChangeAnim(int animId)
+    void PlayAnim(string animName)
     {
-        // ©•ª‚ªŒ ŒÀ‚ğ‚Á‚Ä‚¢‚é‚Æ‚«‚¾‚¯“¯Šú—p‚Ì’l‚ğ•Ï‚¦‚é
-        if (Object != null && Object.HasStateAuthority)
+        if (animator == null)
         {
-            NetworkAnimId = animId;
-        }
-
-        PlayAnimById(animId);
-    }
-
-    void PlayAnimById(int animId)
-    {
-        if (animator == null) return;
-
-        // “¯‚¶ƒAƒjƒ[ƒVƒ‡ƒ“‚È‚çÄ¶‚µ’¼‚³‚È‚¢
-        if (currentAnimId == animId) return;
-
-        currentAnimId = animId;
-
-        string animName = GetAnimName(animId);
-        animator.CrossFade(animName, 0.1f);
-    }
-
-    string GetAnimName(int animId)
-    {
-        switch (animId)
-        {
-            case ANIM_RUN_FORWARD:
-                return RUN_FORWARD;
-
-            case ANIM_RUN_BACK:
-                return RUN_BACK;
-
-            case ANIM_RUN_LEFT:
-                return RUN_LEFT;
-
-            case ANIM_RUN_RIGHT:
-                return RUN_RIGHT;
-
-            case ANIM_ATTACK_STAB:
-                return ATTACK_STAB;
-
-            case ANIM_ATTACK_FULL:
-                return ATTACK_FULL;
-
-            case ANIM_DAMAGE:
-                return DAMAGE;
-
-            case ANIM_DEATH:
-                return DEATH;
-
-            case ANIM_IDLE:
-            default:
-                return IDLE;
-        }
-    }
-
-    void SetupCamera()
-    {
-        // ©•ª‚ÌƒLƒƒƒ‰‚Å‚Í‚È‚¢ê‡AƒvƒŒƒCƒ„[Prefab“à‚ÌƒJƒƒ‰‚ğ–³Œø‰»
-        if (!IsMine)
-        {
-            Camera[] cameras = GetComponentsInChildren<Camera>(true);
-            foreach (Camera cam in cameras)
-            {
-                cam.gameObject.SetActive(false);
-            }
-
-            AudioListener[] listeners = GetComponentsInChildren<AudioListener>(true);
-            foreach (AudioListener listener in listeners)
-            {
-                listener.enabled = false;
-            }
-
             return;
         }
 
-        // ©•ª‚ÌƒLƒƒƒ‰‚È‚çƒJƒƒ‰‚ğİ’è
-        if (viewCamera == null)
+        if (string.IsNullOrEmpty(animName))
         {
-            Camera childCamera = GetComponentInChildren<Camera>();
-
-            if (childCamera != null)
-            {
-                viewCamera = childCamera.transform;
-            }
-            else if (Camera.main != null)
-            {
-                viewCamera = Camera.main.transform;
-            }
+            return;
         }
+
+        if (currentAnim == animName)
+        {
+            return;
+        }
+
+        currentAnim = animName;
+        animator.CrossFade(animName, 0.1f);
     }
 }
