@@ -5,18 +5,27 @@ public class JoyconSwingAttack : MonoBehaviour
 {
     public PlayerMovement playerMovement;
 
-    public float swingThreshold = 3.0f;
+    [Header("Joy-Con")]
+    public int joyconIndex = 0;
+
+    [Header("Swing Settings")]
+    public float swingThreshold = 4.0f;
     public float attackInterval = 0.7f;
 
-    public Joycon.Button aButton = Joycon.Button.DPAD_RIGHT;
+    [Header("Direction Judge")]
+    public float directionDifference = 1.2f;
 
     private List<Joycon> joycons;
     private float lastAttackTime = -10.0f;
-    private float logTimer = 0.0f;
 
     void Start()
     {
-        Debug.Log("JoyconSwingAttack Start できてる");
+        Debug.Log("JoyconSwingAttack Start");
+
+        if (playerMovement == null)
+        {
+            FindPlayerMovement();
+        }
     }
 
     void Update()
@@ -24,14 +33,6 @@ public class JoyconSwingAttack : MonoBehaviour
         if (playerMovement == null || !playerMovement.gameObject.activeInHierarchy)
         {
             FindPlayerMovement();
-        }
-
-        logTimer += Time.deltaTime;
-
-        if (logTimer >= 1.0f)
-        {
-            logTimer = 0.0f;
-            Debug.Log("JoyconSwingAttack Update 動いてる");
         }
 
         if (JoyconManager.Instance == null)
@@ -46,42 +47,66 @@ public class JoyconSwingAttack : MonoBehaviour
             return;
         }
 
+        if (joyconIndex < 0 || joyconIndex >= joycons.Count)
+        {
+            return;
+        }
+
         if (playerMovement == null)
         {
             return;
         }
 
-        Joycon joycon = joycons[0];
+        Joycon joycon = joycons[joyconIndex];
 
         Vector3 gyro = joycon.GetGyro();
-        Vector3 accel = joycon.GetAccel();
 
-        float swingPower = gyro.magnitude + accel.magnitude;
+        float xPower = Mathf.Abs(gyro.x);
+        float yPower = Mathf.Abs(gyro.y);
+        float zPower = Mathf.Abs(gyro.z);
 
-        if (swingPower > swingThreshold &&
-            Time.time - lastAttackTime > attackInterval)
+        float swingPower = Mathf.Max(xPower, yPower, zPower);
+
+        if (swingPower < swingThreshold)
         {
-            lastAttackTime = Time.time;
+            return;
+        }
 
-            bool isAPressed = joycon.GetButton(aButton);
+        if (Time.time - lastAttackTime < attackInterval)
+        {
+            return;
+        }
 
-            if (isAPressed)
-            {
-                Debug.Log("Joy-Con A + 振り → Kキー動作：刺す攻撃");
-                playerMovement.RequestStabAttack();
-            }
-            else
-            {
-                Debug.Log("Joy-Con振り → Jキー動作：フル攻撃");
-                playerMovement.RequestFullAttack();
-            }
+        lastAttackTime = Time.time;
+
+        Debug.Log(
+            "Joy-Con Swing / x: " + xPower +
+            " / y: " + yPower +
+            " / z: " + zPower
+        );
+
+        if (xPower > yPower * directionDifference &&
+            xPower > zPower * directionDifference)
+        {
+            Debug.Log("Joy-Con 縦振り → Jキー動作：フル攻撃");
+            playerMovement.RequestFullAttack();
+        }
+        else if (yPower > xPower * directionDifference &&
+                 yPower > zPower * directionDifference)
+        {
+            Debug.Log("Joy-Con 横振り → Kキー動作：刺す攻撃");
+            playerMovement.RequestStabAttack();
+        }
+        else
+        {
+            Debug.Log("Joy-Con 振り方向が曖昧 → フル攻撃");
+            playerMovement.RequestFullAttack();
         }
     }
 
     void FindPlayerMovement()
     {
-        PlayerMovement[] players =
-            FindObjectsOfType<PlayerMovement>();
+        PlayerMovement[] players = FindObjectsOfType<PlayerMovement>();
 
         foreach (PlayerMovement player in players)
         {
@@ -103,10 +128,21 @@ public class JoyconSwingAttack : MonoBehaviour
             }
         }
 
-        if (players.Length > 0)
+        foreach (PlayerMovement player in players)
         {
-            playerMovement = players[0];
-            Debug.Log("PlayerMovementを仮で設定しました: " + players[0].name);
+            if (player == null)
+            {
+                continue;
+            }
+
+            if (!player.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            playerMovement = player;
+            Debug.Log("PlayerMovementを仮で設定しました: " + player.name);
+            return;
         }
     }
 }

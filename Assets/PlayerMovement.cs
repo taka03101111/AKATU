@@ -135,10 +135,14 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
+        // 視点を基本前固定にしたいので、上下カメラ操作は使わない
+        // もし上矢印・下矢印で視点上下を復活させたいなら、下の3行を戻す
+        /*
         if (!ActionTimer.IsRunning)
         {
             UpdateCameraPitch();
         }
+        */
 
         if (Input.GetKeyDown(KeyCode.P))
         {
@@ -155,15 +159,18 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.K))
+        // J：フル攻撃
+        if (Input.GetKeyDown(KeyCode.J))
         {
-            stabRequested = true;
+            RequestFullAttack();
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.J))
+        // K：刺す攻撃
+        if (Input.GetKeyDown(KeyCode.K))
         {
-            fullAttackRequested = true;
+            RequestStabAttack();
+            return;
         }
     }
 
@@ -267,18 +274,7 @@ public class PlayerMovement : NetworkBehaviour
 
     private void MoveCharacter(float deltaTime)
     {
-        float horizontal = 0.0f;
         float vertical = 0.0f;
-
-        if (Input.GetKey(KeyCode.A))
-        {
-            horizontal -= 1.0f;
-        }
-
-        if (Input.GetKey(KeyCode.D))
-        {
-            horizontal += 1.0f;
-        }
 
         if (Input.GetKey(KeyCode.W))
         {
@@ -291,19 +287,18 @@ public class PlayerMovement : NetworkBehaviour
         }
 
         Vector3 moveDirection =
-            transform.right * horizontal +
             transform.forward * vertical;
 
-        if (moveDirection.sqrMagnitude > 1.0f)
-        {
-            moveDirection.Normalize();
-        }
+        int nextAnim = ANIM_IDLE;
 
-        int nextAnim =
-            GetMoveAnimation(
-                horizontal,
-                vertical
-            );
+        if (vertical > 0.0f)
+        {
+            nextAnim = ANIM_RUN_FORWARD;
+        }
+        else if (vertical < 0.0f)
+        {
+            nextAnim = ANIM_RUN_BACK;
+        }
 
         MoveWithGravity(
             moveDirection,
@@ -339,50 +334,16 @@ public class PlayerMovement : NetworkBehaviour
         );
     }
 
-    private int GetMoveAnimation(
-        float horizontal,
-        float vertical
-    )
-    {
-        if (Mathf.Abs(vertical) >=
-            Mathf.Abs(horizontal))
-        {
-            if (vertical > 0.0f)
-            {
-                return ANIM_RUN_FORWARD;
-            }
-
-            if (vertical < 0.0f)
-            {
-                return ANIM_RUN_BACK;
-            }
-        }
-        else
-        {
-            if (horizontal < 0.0f)
-            {
-                return ANIM_RUN_LEFT;
-            }
-
-            if (horizontal > 0.0f)
-            {
-                return ANIM_RUN_RIGHT;
-            }
-        }
-
-        return ANIM_IDLE;
-    }
-
     private void RotateCharacter(float deltaTime)
     {
         float rotateInput = 0.0f;
 
-        if (Input.GetKey(KeyCode.LeftArrow))
+        if (Input.GetKey(KeyCode.A))
         {
             rotateInput -= 1.0f;
         }
 
-        if (Input.GetKey(KeyCode.RightArrow))
+        if (Input.GetKey(KeyCode.D))
         {
             rotateInput += 1.0f;
         }
@@ -430,6 +391,48 @@ public class PlayerMovement : NetworkBehaviour
                 0.0f,
                 0.0f
             );
+    }
+
+    public void RequestStabAttack()
+    {
+        if (!HasLocalControl)
+        {
+            return;
+        }
+
+        if (playerHealth != null &&
+            playerHealth.IsDead)
+        {
+            return;
+        }
+
+        if (ActionTimer.IsRunning)
+        {
+            return;
+        }
+
+        stabRequested = true;
+    }
+
+    public void RequestFullAttack()
+    {
+        if (!HasLocalControl)
+        {
+            return;
+        }
+
+        if (playerHealth != null &&
+            playerHealth.IsDead)
+        {
+            return;
+        }
+
+        if (ActionTimer.IsRunning)
+        {
+            return;
+        }
+
+        fullAttackRequested = true;
     }
 
     private void StartAttack(
@@ -485,7 +488,10 @@ public class PlayerMovement : NetworkBehaviour
             yield break;
         }
 
-        attackHitbox.BeginAttack(damage);
+        if (attackHitbox != null)
+        {
+            attackHitbox.BeginAttack(damage);
+        }
 
         if (duration > 0.0f)
         {
@@ -493,7 +499,11 @@ public class PlayerMovement : NetworkBehaviour
                 new WaitForSeconds(duration);
         }
 
-        attackHitbox.EndAttack();
+        if (attackHitbox != null)
+        {
+            attackHitbox.EndAttack();
+        }
+
         attackHitboxRoutine = null;
     }
 
@@ -641,46 +651,14 @@ public class PlayerMovement : NetworkBehaviour
             viewCamera =
                 cameras[0].transform;
         }
-    }
-    public void RequestStabAttack()
-    {
-        if (!HasLocalControl)
-        {
-            return;
-        }
 
-        if (playerHealth != null && playerHealth.IsDead)
+        if (viewCamera != null)
         {
-            return;
+            cameraPitch = 0.0f;
+            viewCamera.localRotation = Quaternion.identity;
         }
-
-        if (ActionTimer.IsRunning)
-        {
-            return;
-        }
-
-        stabRequested = true;
     }
 
-    public void RequestFullAttack()
-    {
-        if (!HasLocalControl)
-        {
-            return;
-        }
-
-        if (playerHealth != null && playerHealth.IsDead)
-        {
-            return;
-        }
-
-        if (ActionTimer.IsRunning)
-        {
-            return;
-        }
-
-        fullAttackRequested = true;
-    }
     private void ClearRequests()
     {
         stabRequested = false;
