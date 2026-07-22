@@ -1,5 +1,4 @@
 using System.Collections;
-using TMPro;
 using UnityEngine;
 
 public class GameRuleManager : MonoBehaviour
@@ -7,30 +6,14 @@ public class GameRuleManager : MonoBehaviour
     [Header("Start Points")]
     public Transform[] startPoints;
 
-    [Header("Point UI")]
-    public TextMeshProUGUI pointText;
-    public GameObject winText;
-
-    [Header("Rule")]
-    public int totalPointCount = 4;
-
     [Header("Find Player")]
     public float findPlayerInterval = 0.2f;
 
     private PlayerMovement playerMovement;
-    private int currentPointCount = 0;
     private bool startPositionSet = false;
-    private bool gameFinished = false;
 
     void Start()
     {
-        UpdatePointText();
-
-        if (winText != null)
-        {
-            winText.SetActive(false);
-        }
-
         StartCoroutine(FindPlayerAndSetStart());
     }
 
@@ -164,73 +147,5 @@ public class GameRuleManager : MonoBehaviour
         }
 
         return 0;
-    }
-
-    public void GetPoint(PointItem pointItem)
-    {
-        if (gameFinished)
-        {
-            return;
-        }
-
-        if (pointItem == null)
-        {
-            return;
-        }
-
-        if (pointItem.IsCollected())
-        {
-            return;
-        }
-
-        pointItem.Collect();
-
-        currentPointCount++;
-        UpdatePointText();
-
-        Debug.Log("Point: " + currentPointCount + " / " + totalPointCount);
-
-        if (currentPointCount >= totalPointCount)
-        {
-            FinishGame();
-        }
-    }
-
-    void UpdatePointText()
-    {
-        if (pointText != null)
-        {
-            pointText.text = "Point : " + currentPointCount + " / " + totalPointCount;
-        }
-    }
-
-    void FinishGame()
-    {
-        if (gameFinished)
-        {
-            return;
-        }
-
-        gameFinished = true;
-
-        if (winText != null)
-        {
-            winText.SetActive(true);
-        }
-
-        if (playerMovement != null)
-        {
-            playerMovement.enabled = false;
-        }
-
-        JoyconSwingAttack joyconSwingAttack =
-            FindObjectOfType<JoyconSwingAttack>();
-
-        if (joyconSwingAttack != null)
-        {
-            joyconSwingAttack.enabled = false;
-        }
-
-        Debug.Log("4つのポイントを集めました。ゲーム終了");
     }
 }

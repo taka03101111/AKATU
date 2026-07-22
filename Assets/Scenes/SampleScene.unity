@@ -791,7 +791,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8728cb9d7fac4b141809d73ef43ddc7f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  gameRuleManager: {fileID: 597572299}
   rotateSpeed: 90
   floatHeight: 0.25
   floatSpeed: 2
@@ -1375,7 +1374,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8728cb9d7fac4b141809d73ef43ddc7f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  gameRuleManager: {fileID: 597572299}
   rotateSpeed: 90
   floatHeight: 0.25
   floatSpeed: 2
@@ -1779,7 +1777,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8728cb9d7fac4b141809d73ef43ddc7f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  gameRuleManager: {fileID: 597572299}
   rotateSpeed: 90
   floatHeight: 0.25
   floatSpeed: 2
@@ -3958,9 +3955,6 @@ MonoBehaviour:
   - {fileID: 601368003}
   - {fileID: 799575920}
   - {fileID: 895941532}
-  pointText: {fileID: 1166536371}
-  winText: {fileID: 1838913322}
-  totalPointCount: 4
   findPlayerInterval: 0.2
 --- !u!4 &597572300
 Transform:
@@ -7543,6 +7537,7 @@ GameObject:
   - component: {fileID: 1166536369}
   - component: {fileID: 1166536370}
   - component: {fileID: 1166536371}
+  - component: {fileID: 1166536372}
   m_Layer: 5
   m_Name: PointText
   m_TagString: Untagged
@@ -7667,6 +7662,19 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!114 &1166536372
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1166536368}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 522c8551a66b2994fb3af594e63dfb8a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  pointText: {fileID: 0}
 --- !u!1 &1189472297
 GameObject:
   m_ObjectHideFlags: 0
@@ -13495,7 +13503,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8728cb9d7fac4b141809d73ef43ddc7f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  gameRuleManager: {fileID: 597572299}
   rotateSpeed: 90
   floatHeight: 0.25
   floatSpeed: 2
