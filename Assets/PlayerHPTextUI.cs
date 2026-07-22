@@ -1,61 +1,83 @@
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class PlayerHPTextUI : MonoBehaviour
 {
-    [SerializeField]
-    private PlayerHealth playerHealth;
+    [SerializeField] private TextMeshProUGUI hpText;
 
-    [SerializeField]
-    private TextMeshProUGUI hpText;
+    private PlayerHealth targetHealth;
 
-    [SerializeField]
-    private Image hpFillImage;
-
-    public void SetPlayerHealth(PlayerHealth health)
+    void Start()
     {
-        playerHealth = health;
-        RefreshUI();
+        if (hpText == null)
+        {
+            hpText = GetComponent<TextMeshProUGUI>();
+        }
     }
 
-    private void Update()
+    void Update()
     {
-        RefreshUI();
+        if (targetHealth == null)
+        {
+            FindLocalPlayerHealth();
+        }
+
+        UpdateHPText();
     }
 
-    private void RefreshUI()
+    public void SetPlayerHealth(PlayerHealth playerHealth)
     {
         if (playerHealth == null)
         {
             return;
         }
 
-        int currentHP = playerHealth.currentHP;
-        int maxHP = playerHealth.MaxHP;
-
-        if (hpText != null)
+        if (playerHealth.Object != null && !playerHealth.Object.HasStateAuthority)
         {
-            hpText.text =
-                "Player HP : " +
-                currentHP +
-                " / " +
-                maxHP;
+            return;
         }
 
-        if (hpFillImage != null)
-        {
-            float hpRate = 0.0f;
+        targetHealth = playerHealth;
+        UpdateHPText();
+    }
 
-            if (maxHP > 0)
+    private void FindLocalPlayerHealth()
+    {
+        PlayerHealth[] healths = FindObjectsOfType<PlayerHealth>();
+
+        foreach (PlayerHealth health in healths)
+        {
+            if (health == null)
             {
-                hpRate =
-                    (float)currentHP /
-                    (float)maxHP;
+                continue;
             }
 
-            hpFillImage.fillAmount =
-                Mathf.Clamp01(hpRate);
+            if (!health.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            if (health.Object != null && health.Object.HasStateAuthority)
+            {
+                targetHealth = health;
+                return;
+            }
         }
+    }
+
+    private void UpdateHPText()
+    {
+        if (hpText == null)
+        {
+            return;
+        }
+
+        if (targetHealth == null)
+        {
+            hpText.text = "HP : - / -";
+            return;
+        }
+
+        hpText.text = "HP : " + targetHealth.CurrentHP + " / " + targetHealth.MaxHP;
     }
 }
